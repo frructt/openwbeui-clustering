@@ -18,6 +18,9 @@ processing:
     - "нет"
     - "спасибо"
   deduplicate: true
+  build_modeling_text: true
+  modeling_max_tokens: 200
+  modeling_strip_stopwords: true
 
 units:
   mode: "merged_messages"
@@ -51,6 +54,8 @@ topic_model:
   nr_topics: null
   representative_examples: 3
   keyword_top_n: 5
+  reduce_outliers: false
+  reduce_outliers_strategy: "embeddings"
 
 llm:
   enabled: true

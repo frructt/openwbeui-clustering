@@ -20,11 +20,14 @@ processing:
     - "спасибо"
     - "понял"
   deduplicate: true
+  build_modeling_text: true
+  modeling_max_tokens: 400
+  modeling_strip_stopwords: true
 
 units:
-  mode: "message"
-  max_messages_per_unit: 3
-  max_gap_minutes: 20
+  mode: "merged_messages"
+  max_messages_per_unit: 2
+  max_gap_minutes: 15
 
 embeddings:
   provider: "openai_compatible"
@@ -44,8 +47,8 @@ topic_model:
   umap_n_components: 10
   umap_min_dist: 0.0
   umap_metric: "cosine"
-  hdbscan_min_cluster_size: 30
-  hdbscan_min_samples: 10
+  hdbscan_min_cluster_size: 20
+  hdbscan_min_samples: 5
   hdbscan_cluster_selection_method: "eom"
   vectorizer_ngram_min: 1
   vectorizer_ngram_max: 2
@@ -53,6 +56,8 @@ topic_model:
   nr_topics: null
   representative_examples: 12
   keyword_top_n: 10
+  reduce_outliers: true
+  reduce_outliers_strategy: "embeddings"
 
 llm:
   enabled: true

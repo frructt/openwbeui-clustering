@@ -14,6 +14,7 @@ from src.clients.embedding_client import (
     build_embedding_cache_key,
     materialize_embeddings,
     prepare_text_for_embedding,
+    resolve_embedding_texts,
 )
 from src.clients.llm_client import MockLLMClient
 from tests.helpers import build_test_config
@@ -69,6 +70,16 @@ class ClientTests(unittest.TestCase):
             with mock.patch.object(client, "_request", side_effect=fake_request):
                 embeddings = client.embed_texts(["sql", "excel", "jira"])
             self.assertEqual(embeddings.shape, (3, 1))
+
+    def test_resolve_embedding_texts_prefers_modeling_text(self) -> None:
+        frame = pd.DataFrame(
+            {
+                "text": ["raw traceback /tmp/a.json"],
+                "modeling_text": ["traceback path"],
+            }
+        )
+        resolved = resolve_embedding_texts(frame)
+        self.assertEqual(resolved.iloc[0], "traceback path")
 
 
 if __name__ == "__main__":

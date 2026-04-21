@@ -38,6 +38,12 @@ def _model_save_path(path: str | Path) -> Path:
     return target_dir / "bertopic_model"
 
 
+def _resolve_documents(units: pd.DataFrame) -> list[str]:
+    if "modeling_text" in units.columns:
+        return units["modeling_text"].fillna("").astype(str).tolist()
+    return units["text"].fillna("").astype(str).tolist()
+
+
 def _resolve_vectorizer_min_df(requested_min_df: int | float, document_count: int) -> int | float:
     """Return a BERTopic-safe min_df value for small corpora.
 
@@ -80,8 +86,9 @@ def _simple_topics(units: pd.DataFrame, embeddings: np.ndarray, config: AppConfi
     working["topic_id"] = working["_simple_label"].map(label_order).astype(int)
     keywords: dict[int, list[str]] = {}
     titles: dict[int, str] = {}
+    text_column = "modeling_text" if "modeling_text" in working.columns else "text"
     for label, topic_id in label_order.items():
-        topic_texts = working.loc[working["topic_id"] == topic_id, "text"].tolist()
+        topic_texts = working.loc[working["topic_id"] == topic_id, text_column].tolist()
         topic_keywords = top_keywords_from_texts(topic_texts, config.topic_model.keyword_top_n)
         keywords[topic_id] = topic_keywords
         titles[topic_id] = build_auto_title(topic_keywords, label)
@@ -130,7 +137,7 @@ def _bertopic_topics(units: pd.DataFrame, embeddings: np.ndarray, config: AppCon
         calculate_probabilities=False,
         verbose=False,
     )
-    documents = units["text"].astype(str).tolist()
+    documents = _resolve_documents(units)
     try:
         topics, _ = topic_model.fit_transform(documents, embeddings)
     except ValueError as exc:
@@ -152,6 +159,25 @@ def _bertopic_topics(units: pd.DataFrame, embeddings: np.ndarray, config: AppCon
             verbose=False,
         )
         topics, _ = topic_model.fit_transform(documents, embeddings)
+
+    initial_outliers = int(sum(topic == -1 for topic in topics))
+    if config.topic_model.reduce_outliers and initial_outliers > 0:
+        logger.info(
+            "Reducing outliers with BERTopic strategy=%s (initial outliers=%s)",
+            config.topic_model.reduce_outliers_strategy,
+            initial_outliers,
+        )
+        reduce_kwargs: dict[str, object] = {"strategy": config.topic_model.reduce_outliers_strategy}
+        if config.topic_model.reduce_outliers_strategy == "embeddings":
+            reduce_kwargs["embeddings"] = embeddings
+        try:
+            topics = topic_model.reduce_outliers(documents, topics, **reduce_kwargs)
+        except TypeError:
+            reduce_kwargs.pop("embeddings", None)
+            topics = topic_model.reduce_outliers(documents, topics, **reduce_kwargs)
+        topic_model.update_topics(documents, topics=topics, vectorizer_model=vectorizer)
+        reduced_outliers = int(sum(topic == -1 for topic in topics))
+        logger.info("Outlier reassignment finished: %s -> %s", initial_outliers, reduced_outliers)
     assignments = pd.DataFrame({"unit_id": units["unit_id"], "topic_id": topics})
 
     keywords: dict[int, list[str]] = {}
@@ -159,7 +185,7 @@ def _bertopic_topics(units: pd.DataFrame, embeddings: np.ndarray, config: AppCon
     for topic_id in sorted(assignments["topic_id"].unique()):
         if int(topic_id) == -1:
             keywords[int(topic_id)] = top_keywords_from_texts(
-                units.loc[assignments["topic_id"] == topic_id, "text"].tolist(),
+                pd.Series(documents).loc[assignments["topic_id"] == topic_id].tolist(),
                 config.topic_model.keyword_top_n,
             )
             titles[int(topic_id)] = "outliers"

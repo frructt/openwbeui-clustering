@@ -197,6 +197,14 @@ def build_embedding_provider(config: AppConfig, provider: BaseEmbeddingProvider 
     raise ValidationError(f"Unsupported embeddings.provider value: {config.embeddings.provider}")
 
 
+def resolve_embedding_texts(units: pd.DataFrame) -> pd.Series:
+    if "modeling_text" in units.columns:
+        return units["modeling_text"].fillna("").astype(str)
+    if "text" in units.columns:
+        return units["text"].fillna("").astype(str)
+    raise ValidationError("Analysis units must contain either `modeling_text` or `text` before embeddings are computed")
+
+
 def prepare_text_for_embedding(text: str, config: EmbeddingsConfig) -> str:
     prepared = str(text)
     if config.strip_null_bytes:
@@ -225,9 +233,6 @@ def materialize_embeddings(
     config: AppConfig,
     provider: BaseEmbeddingProvider | None = None,
 ) -> np.ndarray:
-    if "text" not in units.columns:
-        raise ValidationError("Analysis units must contain a `text` column before embeddings are computed")
-
     active_provider = build_embedding_provider(config, provider)
     cache_dir = ensure_dir(config.artifacts.embedding_cache_dir)
     ordered_rows: list[np.ndarray] = []
@@ -235,8 +240,9 @@ def materialize_embeddings(
     missing_hashes: list[str] = []
     truncated_count = 0
     null_sanitized_count = 0
+    embedding_texts = resolve_embedding_texts(units)
 
-    for text in units["text"].astype(str):
+    for text in embedding_texts:
         prepared_text = prepare_text_for_embedding(text, config.embeddings)
         if prepared_text != text:
             if "\x00" in text:
@@ -272,7 +278,7 @@ def materialize_embeddings(
 
     for index, row in enumerate(ordered_rows):
         if row is None:
-            text_hash = build_embedding_cache_key(str(units.iloc[index]["text"]), config.embeddings)
+            text_hash = build_embedding_cache_key(str(embedding_texts.iloc[index]), config.embeddings)
             cache_path = Path(cache_dir) / f"{text_hash}.npy"
             ordered_rows[index] = load_numpy(cache_path)
 

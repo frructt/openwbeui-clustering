@@ -21,6 +21,8 @@ class UnitBuilderTests(unittest.TestCase):
             self.assertEqual(len(units), len(user_messages))
             self.assertEqual(len(mapping), len(user_messages))
             self.assertTrue((units["n_messages"] == 1).all())
+            self.assertIn("modeling_text", units.columns)
+            self.assertIn("modeling_len_tokens", units.columns)
 
     def test_merged_messages_mode_merges_adjacent_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -33,8 +35,8 @@ class UnitBuilderTests(unittest.TestCase):
             merged_sql = units[units["chat_uuid"] == "chat-1"]
             self.assertTrue((merged_sql["n_messages"] >= 1).all())
             self.assertEqual(mapping["source_row_id"].nunique(), len(user_messages))
+            self.assertTrue((merged_sql["modeling_len_tokens"] > 0).all())
 
 
 if __name__ == "__main__":
     unittest.main()
-

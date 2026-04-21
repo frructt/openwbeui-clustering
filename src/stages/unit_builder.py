@@ -21,6 +21,7 @@ def _build_unit_record(group: pd.DataFrame, mode: str) -> dict[str, object]:
     ordered = group.sort_values("timestamp")
     source_ids = ordered["source_row_id"].astype(str).tolist()
     text = "\n".join(ordered["message"].tolist())
+    modeling_text = " ".join(ordered["message_for_modeling"].astype(str).tolist()).strip()
     flags = aggregate_flags(ordered, flag_names())
     unit_id = f"{mode}-{stable_text_hash('|'.join(source_ids))[:16]}"
     return {
@@ -33,8 +34,10 @@ def _build_unit_record(group: pd.DataFrame, mode: str) -> dict[str, object]:
         "timestamp": ordered["timestamp"].min(),
         "n_messages": int(len(ordered)),
         "text": text,
+        "modeling_text": modeling_text,
         "text_len_chars": len(text),
         "text_len_words": len(text.split()),
+        "modeling_len_tokens": len(modeling_text.split()),
         "date": ordered["date"].iloc[0],
         "week": ordered["week"].iloc[0],
         "month": ordered["month"].iloc[0],
@@ -49,8 +52,10 @@ def _build_message_mode(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     units["end_ts"] = units["timestamp"]
     units["n_messages"] = 1
     units["text"] = units["message"]
+    units["modeling_text"] = units["message_for_modeling"]
     units["text_len_chars"] = units["message_len_chars"]
     units["text_len_words"] = units["message_len_words"]
+    units["modeling_len_tokens"] = units["message_modeling_len_tokens"]
     unit_columns = [
         "unit_id",
         "chat_uuid",
@@ -61,8 +66,10 @@ def _build_message_mode(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
         "timestamp",
         "n_messages",
         "text",
+        "modeling_text",
         "text_len_chars",
         "text_len_words",
+        "modeling_len_tokens",
         "date",
         "week",
         "month",

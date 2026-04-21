@@ -30,13 +30,16 @@ class ProcessingConfig:
     drop_trivial_messages: bool = True
     trivial_messages: list[str] = field(default_factory=list)
     deduplicate: bool = True
+    build_modeling_text: bool = True
+    modeling_max_tokens: int = 400
+    modeling_strip_stopwords: bool = True
 
 
 @dataclass(slots=True)
 class UnitsConfig:
-    mode: str = "message"
-    max_messages_per_unit: int = 3
-    max_gap_minutes: int = 20
+    mode: str = "merged_messages"
+    max_messages_per_unit: int = 2
+    max_gap_minutes: int = 15
 
 
 @dataclass(slots=True)
@@ -60,8 +63,8 @@ class TopicModelConfig:
     umap_n_components: int = 10
     umap_min_dist: float = 0.0
     umap_metric: str = "cosine"
-    hdbscan_min_cluster_size: int = 30
-    hdbscan_min_samples: int = 10
+    hdbscan_min_cluster_size: int = 20
+    hdbscan_min_samples: int = 5
     hdbscan_cluster_selection_method: str = "eom"
     vectorizer_ngram_min: int = 1
     vectorizer_ngram_max: int = 2
@@ -69,6 +72,8 @@ class TopicModelConfig:
     nr_topics: int | None = None
     representative_examples: int = 12
     keyword_top_n: int = 10
+    reduce_outliers: bool = True
+    reduce_outliers_strategy: str = "embeddings"
 
 
 @dataclass(slots=True)
