@@ -1,5 +1,5 @@
 input:
-  path: "data/raw/dialogs.csv"
+  path: "data/raw/data.csv"
   format: "csv"
   time_column: "Время"
   user_column: "Пользователь"
@@ -31,11 +31,11 @@ units:
 
 embeddings:
   provider: "openai_compatible"
-  base_url: "http://localhost:8000/v1"
-  api_key: "dummy"
-  model: "Qwen/Qwen3-Embedding-8B"
+  base_url: "https://sam-vllm-ml2.dev.bia-tech.ru/v1"
+  api_key: "sam-key-1"
+  model: "Qwen3-Embedding-8B"
   batch_size: 64
-  timeout_sec: 120
+  timeout_sec: 800
   max_retries: 5
   hash_dimensions: 64
   max_text_chars: 12000
@@ -62,8 +62,8 @@ topic_model:
 llm:
   enabled: true
   provider: "openai_compatible"
-  base_url: "http://localhost:8001/v1"
-  api_key: "dummy"
+  base_url: "https://ai-hub-litellm.dellin.dev/v1"
+  api_key: "sk-3A7zx6lSwoaDKyi7ajCugQ"
   model: "gpt-oss-120b"
   timeout_sec: 120
   max_retries: 5
