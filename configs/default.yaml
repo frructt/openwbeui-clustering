@@ -31,7 +31,7 @@ units:
 
 embeddings:
   provider: "openai_compatible"
-  base_url: "https://sam-vllm-ml2.dev.bia-tech.ru/v1"
+  base_url: "https://sam-vllm-ml2.dev.bia-tech.ru/api/v1"
   api_key: "sam-key-1"
   model: "Qwen3-Embedding-8B"
   batch_size: 64
