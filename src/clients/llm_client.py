@@ -38,14 +38,35 @@ class BaseLLMProvider(ABC):
 def _clean_json_payload(text: str) -> dict[str, object]:
     normalized = text.strip()
     if normalized.startswith("```"):
-        normalized = normalized.strip("`")
-        if "\n" in normalized:
-            normalized = normalized.split("\n", 1)[1]
-    start = normalized.find("{")
-    end = normalized.rfind("}")
-    if start == -1 or end == -1:
-        raise ValidationError("LLM response does not contain a JSON object")
-    payload = json.loads(normalized[start : end + 1])
+        fence_lines = normalized.splitlines()
+        if fence_lines and fence_lines[0].startswith("```"):
+            fence_lines = fence_lines[1:]
+        if fence_lines and fence_lines[-1].startswith("```"):
+            fence_lines = fence_lines[:-1]
+        normalized = "\n".join(fence_lines).strip()
+
+    decoder = json.JSONDecoder()
+    start_positions = [index for index, char in enumerate(normalized) if char == "{"] or [-1]
+    last_error: Exception | None = None
+    payload: dict[str, object] | None = None
+    for start in start_positions:
+        if start < 0:
+            break
+        try:
+            candidate, _ = decoder.raw_decode(normalized[start:])
+        except json.JSONDecodeError as exc:
+            last_error = exc
+            continue
+        if isinstance(candidate, dict):
+            payload = candidate
+            break
+        last_error = ValidationError("LLM response JSON is not an object")
+
+    if payload is None:
+        preview = normalized[:1000].replace("\n", "\\n")
+        raise ValidationError(
+            f"LLM response does not contain a parseable JSON object. preview={preview!r}, error={last_error}"
+        )
     return {key: payload.get(key, "") for key in RESPONSE_KEYS}
 
 
@@ -128,4 +149,3 @@ def build_llm_provider(config: AppConfig, provider: BaseLLMProvider | None = Non
     if config.llm.provider == "mock":
         return MockLLMClient()
     raise ValidationError(f"Unsupported llm.provider value: {config.llm.provider}")
-

@@ -26,6 +26,19 @@ def _topic_cache_key(summary_row: pd.Series, examples: pd.DataFrame) -> str:
     return stable_text_hash(str(payload))
 
 
+def _fallback_enrichment(summary_row: pd.Series, error: Exception) -> dict[str, object]:
+    auto_title = str(summary_row.get("topic_title_auto", f"topic_{int(summary_row['topic_id'])}"))
+    return {
+        "topic_title": auto_title,
+        "topic_description": f"Automatic fallback because LLM enrichment failed for topic {int(summary_row['topic_id'])}.",
+        "suspected_jtbd": "Fallback only; review representative examples manually.",
+        "suspected_pain_points": "Fallback only; manual validation required.",
+        "suspected_business_value": "Fallback only; infer from topic size and user coverage.",
+        "suspected_product_action": "Review this topic manually before using it for product decisions.",
+        "confidence_note": f"LLM enrichment fallback due to error: {type(error).__name__}: {error}",
+    }
+
+
 def run_llm_enrichment(config: AppConfig, provider: BaseLLMProvider | None = None) -> pd.DataFrame:
     summary = read_dataframe(config.artifacts.topic_summary_base_path)
     examples = read_dataframe(config.artifacts.topic_examples_base_path)
@@ -61,7 +74,15 @@ def run_llm_enrichment(config: AppConfig, provider: BaseLLMProvider | None = Non
         if cache_path.exists():
             enrichment = read_json(cache_path)
         else:
-            enrichment = active_provider.enrich_topic(payload)
+            try:
+                enrichment = active_provider.enrich_topic(payload)
+            except Exception as exc:
+                logger.warning(
+                    "LLM enrichment failed for topic_id=%s; falling back to auto-generated placeholders: %s",
+                    topic_id,
+                    exc,
+                )
+                enrichment = _fallback_enrichment(summary_row, exc)
             write_json(enrichment, cache_path)
         rows.append({"topic_id": topic_id, **enrichment})
 
@@ -69,4 +90,3 @@ def run_llm_enrichment(config: AppConfig, provider: BaseLLMProvider | None = Non
     write_dataframe(result, config.artifacts.llm_enrichment_path)
     logger.info("LLM enrichment completed for %s topics", len(result))
     return result
-

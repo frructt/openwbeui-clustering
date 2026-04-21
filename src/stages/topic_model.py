@@ -32,6 +32,12 @@ def _save_model_metadata(path: str | Path, payload: dict[str, object]) -> None:
     write_json(payload, target / "metadata.json")
 
 
+def _model_save_path(path: str | Path) -> Path:
+    target_dir = Path(path)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    return target_dir / "bertopic_model"
+
+
 def _resolve_vectorizer_min_df(requested_min_df: int | float, document_count: int) -> int | float:
     """Return a BERTopic-safe min_df value for small corpora.
 
@@ -164,7 +170,7 @@ def _bertopic_topics(units: pd.DataFrame, embeddings: np.ndarray, config: AppCon
         titles[int(topic_id)] = build_auto_title(topic_keywords, f"topic_{int(topic_id)}")
 
     try:
-        topic_model.save(config.artifacts.topic_model_dir, serialization="pickle")
+        topic_model.save(str(_model_save_path(config.artifacts.topic_model_dir)), serialization="pickle")
     except Exception as exc:  # pragma: no cover - best effort save
         logger.warning("Failed to serialize BERTopic model; writing metadata instead: %s", exc)
         _save_model_metadata(
