@@ -32,6 +32,41 @@ def _save_model_metadata(path: str | Path, payload: dict[str, object]) -> None:
     write_json(payload, target / "metadata.json")
 
 
+def _resolve_vectorizer_min_df(requested_min_df: int | float, document_count: int) -> int | float:
+    """Return a BERTopic-safe min_df value for small corpora.
+
+    BERTopic applies CountVectorizer to topic-level pseudo-documents after clustering.
+    An absolute min_df like 5 can become invalid if the model extracts only a few topics.
+    For integer thresholds greater than 1, convert them to a corpus-relative fraction so
+    the value remains valid even when the number of topics is small.
+    """
+
+    if isinstance(requested_min_df, float):
+        return min(max(requested_min_df, 1.0 / max(document_count, 1)), 1.0)
+    if requested_min_df <= 1:
+        return 1
+    safe_fraction = requested_min_df / max(document_count, 1)
+    return min(max(safe_fraction, 1.0 / max(document_count, 1)), 1.0)
+
+
+def _build_vectorizer(config: AppConfig, document_count: int):
+    from sklearn.feature_extraction.text import CountVectorizer
+
+    effective_min_df = _resolve_vectorizer_min_df(config.topic_model.vectorizer_min_df, document_count)
+    if effective_min_df != config.topic_model.vectorizer_min_df:
+        logger.info(
+            "Adjusted BERTopic vectorizer min_df from %s to %s for a corpus of %s documents",
+            config.topic_model.vectorizer_min_df,
+            effective_min_df,
+            document_count,
+        )
+    return CountVectorizer(
+        ngram_range=(config.topic_model.vectorizer_ngram_min, config.topic_model.vectorizer_ngram_max),
+        min_df=effective_min_df,
+        token_pattern=r"(?u)\b\w+\b",
+    )
+
+
 def _simple_topics(units: pd.DataFrame, embeddings: np.ndarray, config: AppConfig) -> tuple[pd.DataFrame, dict[int, list[str]], dict[int, str]]:
     working = units.copy().reset_index(drop=True)
     working["_simple_label"] = working.apply(infer_simple_topic_label, axis=1)
@@ -59,18 +94,14 @@ def _bertopic_topics(units: pd.DataFrame, embeddings: np.ndarray, config: AppCon
     try:
         import hdbscan
         from bertopic import BERTopic
-        from sklearn.feature_extraction.text import CountVectorizer
         from umap import UMAP
     except ImportError as exc:
         raise RuntimeError(
             "BERTopic dependencies are not installed. Install requirements.txt or switch topic_model.backend to `simple`."
         ) from exc
 
-    vectorizer = CountVectorizer(
-        ngram_range=(config.topic_model.vectorizer_ngram_min, config.topic_model.vectorizer_ngram_max),
-        min_df=config.topic_model.vectorizer_min_df,
-        token_pattern=r"(?u)\b\w+\b",
-    )
+    document_count = len(units)
+    vectorizer = _build_vectorizer(config, document_count)
     umap_model = UMAP(
         n_neighbors=config.topic_model.umap_n_neighbors,
         n_components=config.topic_model.umap_n_components,
@@ -94,7 +125,27 @@ def _bertopic_topics(units: pd.DataFrame, embeddings: np.ndarray, config: AppCon
         verbose=False,
     )
     documents = units["text"].astype(str).tolist()
-    topics, _ = topic_model.fit_transform(documents, embeddings)
+    try:
+        topics, _ = topic_model.fit_transform(documents, embeddings)
+    except ValueError as exc:
+        if "max_df corresponds to < documents than min_df" not in str(exc):
+            raise
+        logger.warning(
+            "BERTopic failed with vectorizer min_df=%s on a small topic set; retrying with min_df=1",
+            config.topic_model.vectorizer_min_df,
+        )
+        retry_vectorizer = _build_vectorizer(config, max(document_count, 1))
+        retry_vectorizer.min_df = 1
+        topic_model = BERTopic(
+            language="multilingual",
+            vectorizer_model=retry_vectorizer,
+            umap_model=umap_model,
+            hdbscan_model=clusterer,
+            nr_topics=config.topic_model.nr_topics,
+            calculate_probabilities=False,
+            verbose=False,
+        )
+        topics, _ = topic_model.fit_transform(documents, embeddings)
     assignments = pd.DataFrame({"unit_id": units["unit_id"], "topic_id": topics})
 
     keywords: dict[int, list[str]] = {}
@@ -162,4 +213,3 @@ def run_topic_model(config: AppConfig) -> dict[str, pd.DataFrame]:
         "trends": trends,
         "examples": examples,
     }
-
