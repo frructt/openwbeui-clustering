@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.artifacts import stable_text_hash
-from src.clients.llm_client import BaseLLMProvider, RESPONSE_KEYS, build_llm_provider
+from src.clients.llm_client import BaseLLMProvider, RESPONSE_KEYS, build_llm_provider, normalize_enrichment_payload
 from src.config import AppConfig
 from src.io_utils import ensure_dir, read_dataframe, read_json, write_dataframe, write_json
 
@@ -28,7 +28,8 @@ def _topic_cache_key(summary_row: pd.Series, examples: pd.DataFrame) -> str:
 
 def _fallback_enrichment(summary_row: pd.Series, error: Exception) -> dict[str, object]:
     auto_title = str(summary_row.get("topic_title_auto", f"topic_{int(summary_row['topic_id'])}"))
-    return {
+    return normalize_enrichment_payload(
+        {
         "topic_title": auto_title,
         "topic_description": f"Automatic fallback because LLM enrichment failed for topic {int(summary_row['topic_id'])}.",
         "suspected_jtbd": "Fallback only; review representative examples manually.",
@@ -36,7 +37,8 @@ def _fallback_enrichment(summary_row: pd.Series, error: Exception) -> dict[str, 
         "suspected_business_value": "Fallback only; infer from topic size and user coverage.",
         "suspected_product_action": "Review this topic manually before using it for product decisions.",
         "confidence_note": f"LLM enrichment fallback due to error: {type(error).__name__}: {error}",
-    }
+        }
+    )
 
 
 def run_llm_enrichment(config: AppConfig, provider: BaseLLMProvider | None = None) -> pd.DataFrame:
@@ -72,10 +74,10 @@ def run_llm_enrichment(config: AppConfig, provider: BaseLLMProvider | None = Non
         cache_key = _topic_cache_key(summary_row, topic_examples)
         cache_path = Path(cache_dir) / f"{cache_key}.json"
         if cache_path.exists():
-            enrichment = read_json(cache_path)
+            enrichment = normalize_enrichment_payload(read_json(cache_path))
         else:
             try:
-                enrichment = active_provider.enrich_topic(payload)
+                enrichment = normalize_enrichment_payload(active_provider.enrich_topic(payload))
             except Exception as exc:
                 logger.warning(
                     "LLM enrichment failed for topic_id=%s; falling back to auto-generated placeholders: %s",
@@ -87,6 +89,9 @@ def run_llm_enrichment(config: AppConfig, provider: BaseLLMProvider | None = Non
         rows.append({"topic_id": topic_id, **enrichment})
 
     result = pd.DataFrame(rows)
+    for key in RESPONSE_KEYS:
+        if key in result.columns:
+            result[key] = result[key].where(result[key].isna(), result[key].astype(str))
     write_dataframe(result, config.artifacts.llm_enrichment_path)
     logger.info("LLM enrichment completed for %s topics", len(result))
     return result

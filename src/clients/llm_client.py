@@ -35,6 +35,30 @@ class BaseLLMProvider(ABC):
         """Return structured topic enrichment."""
 
 
+def _normalize_enrichment_value(value: object) -> object:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, (int, float, bool)):
+        return str(value)
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    if isinstance(value, (list, tuple, set)):
+        parts = []
+        for item in value:
+            normalized = _normalize_enrichment_value(item)
+            if normalized is None:
+                continue
+            parts.append(str(normalized))
+        return "; ".join(part for part in parts if part)
+    return str(value)
+
+
+def normalize_enrichment_payload(payload: dict[str, object]) -> dict[str, object]:
+    return {key: _normalize_enrichment_value(payload.get(key)) for key in RESPONSE_KEYS}
+
+
 def _clean_json_payload(text: str) -> dict[str, object]:
     normalized = text.strip()
     if normalized.startswith("```"):
@@ -67,7 +91,7 @@ def _clean_json_payload(text: str) -> dict[str, object]:
         raise ValidationError(
             f"LLM response does not contain a parseable JSON object. preview={preview!r}, error={last_error}"
         )
-    return {key: payload.get(key, "") for key in RESPONSE_KEYS}
+    return normalize_enrichment_payload(payload)
 
 
 class OpenAICompatibleLLMClient(BaseLLMProvider):
