@@ -62,7 +62,7 @@ topic_model:
 llm:
   enabled: true
   provider: "openai_compatible"
-  base_url: "https://ai-hub-litellm.dellin.dev/v1"
+  base_url: "https://ai-hub-litellm.dellin.dev"
   api_key: "sk-3A7zx6lSwoaDKyi7ajCugQ"
   model: "gpt-oss-120b"
   timeout_sec: 120
