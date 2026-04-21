@@ -35,6 +35,8 @@ embeddings:
   timeout_sec: 120
   max_retries: 5
   hash_dimensions: 64
+  max_text_chars: 12000
+  strip_null_bytes: true
 
 topic_model:
   backend: "bertopic"
@@ -93,4 +95,3 @@ artifacts:
   insight_report_path: "reports/insights/insight_report.md"
   topic_sizes_figure_path: "reports/figures/topic_sizes.png"
   topic_growth_figure_path: "reports/figures/topic_growth.png"
-

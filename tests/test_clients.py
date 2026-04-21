@@ -3,10 +3,18 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import pandas as pd
 
-from src.clients.embedding_client import HashingEmbeddingClient, materialize_embeddings
+from src.clients.embedding_client import (
+    EmbeddingRequestError,
+    HashingEmbeddingClient,
+    OpenAICompatibleEmbeddingClient,
+    build_embedding_cache_key,
+    materialize_embeddings,
+    prepare_text_for_embedding,
+)
 from src.clients.llm_client import MockLLMClient
 from tests.helpers import build_test_config
 
@@ -32,7 +40,36 @@ class ClientTests(unittest.TestCase):
         self.assertIn("topic_title", response)
         self.assertIn("suspected_product_action", response)
 
+    def test_prepare_text_for_embedding_truncates_and_sanitizes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = build_test_config(Path(tmp))
+            config.embeddings.max_text_chars = 5
+            prepared = prepare_text_for_embedding("ab\x00cdefghi", config.embeddings)
+            self.assertEqual(prepared, "ab cd")
+
+    def test_embedding_cache_key_depends_on_prepared_text(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = build_test_config(Path(tmp))
+            config.embeddings.max_text_chars = 4
+            first = build_embedding_cache_key("abcdef", config.embeddings)
+            second = build_embedding_cache_key("abcdZZ", config.embeddings)
+            self.assertEqual(first, second)
+
+    def test_openai_client_splits_batch_on_http_400(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = build_test_config(Path(tmp))
+            client = OpenAICompatibleEmbeddingClient(config.embeddings)
+
+            def fake_request(payload):
+                batch = payload["input"]
+                if len(batch) > 1:
+                    raise EmbeddingRequestError("bad request", status_code=400, response_body="too many items in batch")
+                return {"data": [{"index": 0, "embedding": [float(len(batch[0]))]}]}
+
+            with mock.patch.object(client, "_request", side_effect=fake_request):
+                embeddings = client.embed_texts(["sql", "excel", "jira"])
+            self.assertEqual(embeddings.shape, (3, 1))
+
 
 if __name__ == "__main__":
     unittest.main()
-

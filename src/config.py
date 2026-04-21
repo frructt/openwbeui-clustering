@@ -49,6 +49,8 @@ class EmbeddingsConfig:
     timeout_sec: int = 120
     max_retries: int = 5
     hash_dimensions: int = 64
+    max_text_chars: int | None = 12000
+    strip_null_bytes: bool = True
 
 
 @dataclass(slots=True)
@@ -150,4 +152,3 @@ def load_config(path: str | Path) -> AppConfig:
         config_path=config_path,
     )
     return config
-
