@@ -1,0 +1,96 @@
+input:
+  path: "data/raw/dialogs.csv"
+  format: "csv"
+  time_column: "Время"
+  user_column: "Пользователь"
+  chat_uuid_column: "Chat UUID"
+  chat_title_column: "Чат"
+  role_column: "role"
+  message_column: "message"
+  encoding: "utf-8"
+
+processing:
+  role_keep: "user"
+  min_chars: 10
+  drop_trivial_messages: true
+  trivial_messages:
+    - "ок"
+    - "да"
+    - "нет"
+    - "спасибо"
+    - "понял"
+  deduplicate: true
+
+units:
+  mode: "message"
+  max_messages_per_unit: 3
+  max_gap_minutes: 20
+
+embeddings:
+  provider: "openai_compatible"
+  base_url: "http://localhost:8000/v1"
+  api_key: "dummy"
+  model: "Qwen/Qwen3-Embedding-8B"
+  batch_size: 64
+  timeout_sec: 120
+  max_retries: 5
+  hash_dimensions: 64
+
+topic_model:
+  backend: "bertopic"
+  umap_n_neighbors: 15
+  umap_n_components: 10
+  umap_min_dist: 0.0
+  umap_metric: "cosine"
+  hdbscan_min_cluster_size: 30
+  hdbscan_min_samples: 10
+  hdbscan_cluster_selection_method: "eom"
+  vectorizer_ngram_min: 1
+  vectorizer_ngram_max: 2
+  vectorizer_min_df: 5
+  nr_topics: null
+  representative_examples: 12
+  keyword_top_n: 10
+
+llm:
+  enabled: true
+  provider: "openai_compatible"
+  base_url: "http://localhost:8001/v1"
+  api_key: "dummy"
+  model: "gpt-oss-120b"
+  timeout_sec: 120
+  max_retries: 5
+  max_examples_per_topic: 12
+  temperature: 0.0
+
+reporting:
+  top_n_topics: 30
+  top_n_examples: 15
+  generate_figures: true
+  topic_growth_periods: 4
+
+artifacts:
+  raw_normalized_path: "data/interim/raw_normalized.parquet"
+  ingest_report_path: "data/interim/ingest_quality_report.json"
+  user_messages_path: "data/interim/user_messages.parquet"
+  analysis_units_path: "data/interim/analysis_units.parquet"
+  unit_message_map_path: "data/interim/unit_message_map.parquet"
+  embeddings_path: "data/interim/embeddings.npy"
+  embedding_cache_dir: "data/interim/embedding_cache"
+  topic_model_dir: "data/interim/topic_model"
+  topic_assignments_path: "data/interim/topic_assignments.parquet"
+  topic_summary_base_path: "data/interim/topic_summary_base.parquet"
+  topic_examples_base_path: "data/interim/topic_examples_base.parquet"
+  topic_domain_breakdown_base_path: "data/interim/topic_domain_breakdown_base.parquet"
+  topic_trends_base_path: "data/interim/topic_trends_by_week_base.parquet"
+  llm_enrichment_path: "data/interim/topic_llm_enrichment.parquet"
+  llm_cache_dir: "data/interim/llm_cache"
+  run_manifest_path: "data/interim/run_manifest.json"
+  topic_summary_path: "reports/tables/topic_summary.csv"
+  topic_examples_path: "reports/tables/topic_examples.csv"
+  topic_trends_path: "reports/tables/topic_trends_by_week.csv"
+  topic_domain_breakdown_path: "reports/tables/topic_domain_breakdown.csv"
+  insight_report_path: "reports/insights/insight_report.md"
+  topic_sizes_figure_path: "reports/figures/topic_sizes.png"
+  topic_growth_figure_path: "reports/figures/topic_growth.png"
+
