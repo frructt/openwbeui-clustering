@@ -45,6 +45,28 @@ If you want BERTopic topic modeling, install the full dependency set from `requi
 
 ## Usage
 
+### Export dialogs from Grafana
+
+The Grafana exporter is intentionally separate from the analysis pipeline. It
+reads `GRAFANA_TOKEN` from `.env`, saves a local snapshot, and does not run
+classification or send dialog text to an LLM.
+
+Create `.env` from `.env.example`, then run:
+
+```bash
+python scripts/export_aihub_dialogs.py \
+  --from 2026-06-01 \
+  --to 2026-07-01 \
+  --output data/raw/aihub_dialogs.parquet
+```
+
+The output uses the standard input columns `Время`, `Пользователь`, `Chat UUID`,
+`Чат`, `role`, and `message`. Messages are filtered to the requested time
+range, and an export report is written next to the output file. The exporter
+reads messages directly with keyset pagination; `--page-size` and
+`--max-messages` therefore count messages, not chats. For a bounded live
+validation, add `--max-messages 100`.
+
 Full pipeline:
 
 ```bash
@@ -104,4 +126,3 @@ Final outputs:
 - `assistant` messages are excluded from topic clustering.
 - LLM enrichment works on topics, not on every individual message.
 - `merged_messages` mode merges consecutive user turns by time gap and count limit. Semantic shift detection is intentionally left for a later iteration.
-

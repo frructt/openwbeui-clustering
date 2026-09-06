@@ -5,6 +5,9 @@ __pycache__/
 *.pyd
 .pytest_cache/
 .DS_Store
+.env
+.env.*
+!.env.example
 
 data/raw/*
 !data/raw/.gitkeep
@@ -19,4 +22,3 @@ reports/tables/*
 !reports/tables/.gitkeep
 reports/insights/*
 !reports/insights/.gitkeep
-
